@@ -34,6 +34,25 @@
         .pin-text { position: absolute; top: 5px; color: white; font-weight: bold; font-size: 13px; z-index: 1; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }
         .village-label { background: transparent; border: none; box-shadow: none; font-size: 12px; font-weight: bold; color: #444; text-shadow: 1px 1px 2px white; pointer-events: none; }
 
+        /* 用于显示后续时间的标签样式 */
+        .time-label {
+            display: none; 
+            position: absolute; 
+            top: -24px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: rgba(255, 255, 255, 0.95); 
+            border: 2px solid #d32f2f; 
+            color: #d32f2f; 
+            font-weight: bold; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            white-space: nowrap; 
+            z-index: 100;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
         #control-panel {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
             background: white; padding: 10px; border-radius: 6px;
@@ -160,7 +179,6 @@
             var group = L.featureGroup();
             var validPoints = points.filter(p => p.lat && p.lng && !isNaN(p.lat) && !isNaN(p.lng));
             
-            // 抓取該路線的專屬 Google 地圖 URL (取第一站的網址)
             var routeMapUrl = '';
             for(var i=0; i<validPoints.length; i++) {
                 if(validPoints[i].mapUrl && validPoints[i].mapUrl !== '') { routeMapUrl = validPoints[i].mapUrl; break; }
@@ -182,12 +200,23 @@
                 
                 var customIcon = L.divIcon({
                     className: 'custom-div-icon',
-                    html: `<div class="pin-wrapper"><div class="pin-body" style="background-color: ${pinColor};"></div><span class="pin-text">${stepDisplay}</span></div>`,
+                    html: `<div class="pin-wrapper">
+                               <div class="time-label">${timeDisplay}</div>
+                               <div class="pin-body" style="background-color: ${pinColor};"></div>
+                               <span class="pin-text">${stepDisplay}</span>
+                           </div>`,
                     iconSize: [30, 40], iconAnchor: [15, 40], popupAnchor: [0, -35]
                 });
 
                 var marker = L.marker([parseFloat(p.lat), parseFloat(p.lng)], { icon: customIcon }).addTo(group);
-                marker.on('click', function(e) { focusRoute(routeName, e.originalEvent); });
+                
+                marker.stepVal = p.step;
+
+                marker.on('click', function(e) { 
+                    focusRoute(routeName, e.originalEvent); 
+                    showSubsequentTimes(routeName, p.step);
+                });
+                
                 var navUrl = `https://www.google.com/maps/search/?api=1&query=${parseFloat(p.lat)},${parseFloat(p.lng)}`;
                 
                 marker.bindPopup(`
@@ -201,9 +230,99 @@
             addRouteToPanel(routeName, color, routeMapUrl);
         });
         startLegendTimer();
+
+        // ★ 修改與優化：同時解析網址路線與特定節點參數 (?route=57&step=19)
+        setTimeout(function() {
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                var routeParam = urlParams.get('route');
+                var stepParam = urlParams.get('step');
+                var targetRouteName = null;
+                
+                if (routeParam) {
+                    var safeRouteParam = String(routeParam).trim();
+                    if (routeGroups[safeRouteParam]) {
+                        targetRouteName = safeRouteParam;
+                    } else {
+                        var keys = Object.keys(routeGroups);
+                        for(var i=0; i<keys.length; i++) {
+                            if(keys[i].includes(safeRouteParam)) {
+                                targetRouteName = keys[i];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (targetRouteName) {
+                        focusRoute(targetRouteName, null);
+                        var bounds = routeGroups[targetRouteName].getBounds();
+                        if (bounds.isValid()) {
+                            map.fitBounds(bounds, { padding: [50, 50] });
+                        }
+
+                        // 如果有提供 step 參數，在防呆保護下進行搜尋與模擬點擊
+                        if (stepParam !== null && stepParam !== undefined && String(stepParam).trim() !== '') {
+                            var safeStepParam = String(stepParam).trim();
+                            var targetMarker = null;
+                            
+                            routeGroups[targetRouteName].eachLayer(function(layer) {
+                                if (layer instanceof L.Marker && layer.stepVal !== undefined && layer.stepVal !== null) {
+                                    if (String(layer.stepVal).trim() === safeStepParam) {
+                                        targetMarker = layer;
+                                    }
+                                }
+                            });
+                            
+                            if (targetMarker) {
+                                // 稍微延遲確保地圖縮放動畫或圖層渲染完全就緒
+                                setTimeout(function() {
+                                    if (targetMarker && map.hasLayer(routeGroups[targetRouteName])) {
+                                        showSubsequentTimes(targetRouteName, targetMarker.stepVal);
+                                        targetMarker.openPopup();
+                                    }
+                                }, 200);
+                            }
+                        }
+                    }
+                }
+            } catch(e) { 
+                console.error('URL Param Parsing Error:', e); 
+            }
+        }, 300); 
     }
 
     initMapData();
+
+    function showSubsequentTimes(targetRoute, startStep) {
+        hideAllTimeLabels(); 
+        if (!targetRoute || startStep === null || startStep === undefined) return;
+        
+        var group = routeGroups[targetRoute];
+        if (!group) return;
+
+        var sStep = parseFloat(startStep);
+        if (isNaN(sStep)) return; 
+
+        group.eachLayer(layer => {
+            if (layer instanceof L.Marker && layer.stepVal !== undefined && layer.stepVal !== null) {
+                var mStep = parseFloat(layer.stepVal);
+                if (!isNaN(mStep) && mStep > sStep) {
+                    if (layer._icon) {
+                        var timeEl = layer._icon.querySelector('.time-label');
+                        if (timeEl) {
+                            timeEl.style.display = 'block';
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function hideAllTimeLabels() {
+        document.querySelectorAll('.time-label').forEach(function(el) {
+            el.style.display = 'none';
+        });
+    }
 
     function startLegendTimer() {
         clearTimeout(legendTimer);
@@ -232,7 +351,6 @@
         var safeId = 'chk-' + String(name).replace(/\s+/g, '-'); 
         div.id = 'item-' + safeId; 
 
-        // 依據有無填寫 URL 呈現不同樣式的地圖按鈕
         var mapBtnHtml = (routeMapUrl && routeMapUrl !== '') 
             ? `<a href="${routeMapUrl}" target="_blank" class="my-map-btn active">地圖</a>`
             : `<a href="#" class="my-map-btn disabled" onclick="alert('尚未綁定 Google 我的地圖連結！\\n請至 Google Sheets「地圖網址」欄位填寫，並重新匯出 JS。'); return false;">地圖</a>`;
@@ -302,6 +420,7 @@
 
     function resetFocus() {
         currentFocusedRoute = null;
+        hideAllTimeLabels(); 
         Object.keys(routeGroups).forEach(name => {
             routeGroups[name].eachLayer(layer => {
                 if (layer instanceof L.Polyline && layer.options && layer.options.originalStyle) layer.setStyle(layer.options.originalStyle);
