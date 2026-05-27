@@ -33,11 +33,9 @@
         }
         .pin-text { position: absolute; top: 5px; color: white; font-weight: bold; font-size: 13px; z-index: 1; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }
         
-        /* 里別標籤樣式 */
         .village-label { background: transparent; border: none; box-shadow: none; font-size: 0.75rem; font-weight: bold; color: #1d3557; text-shadow: 1px 1px 2px white; text-align: center; transition: all 0.2s; }
         .map-zoomed-out .village-label { font-size: 0.5rem !important; opacity: 0.3 !important; }
 
-        /* 用于显示后续时间的标签样式 */
         .time-label {
             display: none; 
             position: absolute; 
@@ -56,7 +54,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        /* 🚀 升級：優化後的控制面板與行動端自適應比例 */
         #control-panel {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
             background: white; padding: 12px; border-radius: 8px;
@@ -66,9 +63,7 @@
             transition: width 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.25s, border-radius 0.25s, background-color 0.25s;
             box-sizing: border-box;
         }
-        #control-panel:not(.panel-collapsed) {
-            resize: both; /* 🚀 支援手動自由調整大小 */
-        }
+        #control-panel:not(.panel-collapsed) { resize: both; }
         
         #panel-content-wrapper { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
         #route-list { flex: 1; overflow-y: auto; padding-right: 2px; }
@@ -81,7 +76,6 @@
         .small-btn { flex: 1; padding: 5px; font-size: 11px; cursor: pointer; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; }
         .small-btn:hover { background: #e9ecef; }
         
-        /* 🚀 升級：清運路線列表極致防擠壓排版 */
         .route-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 13px; gap: 6px; width: 100%; }
         .route-item-left { display: flex; align-items: center; gap: 5px; overflow: hidden; flex: 1; }
         .route-item label { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; flex: 1; }
@@ -95,7 +89,6 @@
         .my-map-btn.active:hover { background: #388E3C; }
         .my-map-btn.disabled { background: #cccccc; cursor: not-allowed; }
 
-        /* 🚀 升級：倒數縮小後的圓形精緻狀態 */
         #control-panel.panel-collapsed {
             width: 44px !important; height: 44px !important; padding: 0 !important;
             border-radius: 50% !important; overflow: hidden; background: #E91E63 !important;
@@ -106,7 +99,6 @@
         #panel-collapsed-icon { display: none; font-size: 20px; color: white; user-select: none; text-align: center; line-height: 44px; }
         #control-panel.panel-collapsed #panel-collapsed-icon { display: block !important; }
 
-        /* 🚀 升級：手機直立拿取時的智慧響應式比例調配 */
         @media (max-width: 576px) {
             #control-panel:not(.panel-collapsed) {
                 width: 165px; padding: 8px; max-height: 60vh; top: 8px; right: 8px;
@@ -213,7 +205,7 @@
     var currentFocusedRoute = null;
     var allRouteData = {}; 
     var legendTimer = null; 
-    var panelTimer = null; // 🚀 路線控制面板計時器
+    var panelTimer = null; 
     var villageLayer = null;
 
     var controlPanelEl = document.getElementById('control-panel');
@@ -284,6 +276,10 @@
             colorIdx++;
 
             var group = L.featureGroup();
+            group.routeColor = color;
+            group.isSnapped = false;
+            group.segments = []; // 🚀 升級：存放獨立線段陣列，徹底消除引擎慣性
+            
             var validPoints = points.filter(p => p.lat && p.lng && !isNaN(p.lat) && !isNaN(p.lng));
             
             var routeMapUrl = '';
@@ -291,10 +287,23 @@
                 if(validPoints[i].mapUrl && validPoints[i].mapUrl !== '') { routeMapUrl = validPoints[i].mapUrl; break; }
             }
 
-            var latlngs = validPoints.map(p => [parseFloat(p.lat), parseFloat(p.lng)]);
-            if (latlngs.length > 0) {
-                var polyline = L.polyline(latlngs, { color: color, weight: 4, opacity: 0.6 }).addTo(group);
-                polyline.options.originalStyle = { color: color, weight: 4, opacity: 0.6 };
+            // =========================================================
+            // 🚀 革命性升級：初始化時先建立一條一條獨立的「直線節點」
+            // 這樣不但初始載入極快，且裁切 (Slicing) 邏輯會變得完美精準
+            // =========================================================
+            for (var i = 0; i < validPoints.length - 1; i++) {
+                var p1 = validPoints[i];
+                var p2 = validPoints[i+1];
+                var poly = L.polyline([[parseFloat(p1.lat), parseFloat(p1.lng)], [parseFloat(p2.lat), parseFloat(p2.lng)]], { color: color, weight: 4, opacity: 0.6 });
+                
+                poly.options.originalStyle = { color: color, weight: 4, opacity: 0.6 };
+                poly.stepStart = parseFloat(p1.step); // 綁定起點的順序號碼，用於神準裁切
+                poly.stepEnd = parseFloat(p2.step);
+                poly.p1 = p1; 
+                poly.p2 = p2;
+                
+                group.addLayer(poly);
+                group.segments.push(poly);
             }
 
             validPoints.forEach(p => {
@@ -319,7 +328,7 @@
                 marker.stepVal = p.step;
 
                 marker.on('click', function(e) { 
-                    focusRoute(routeName, e.originalEvent); 
+                    focusRoute(routeName, e.originalEvent, p.step); 
                     showSubsequentTimes(routeName, p.step);
                 });
                 
@@ -335,7 +344,7 @@
             addRouteToPanel(routeName, color, routeMapUrl);
         });
         startLegendTimer();
-        startPanelTimer(); // 🚀 初始化倒數
+        startPanelTimer(); 
 
         setTimeout(function() {
             try {
@@ -375,6 +384,7 @@
                             if (targetMarker) {
                                 setTimeout(function() {
                                     if (targetMarker && map.hasLayer(routeGroups[targetRouteName])) {
+                                        focusRoute(targetRouteName, null, targetMarker.stepVal);
                                         showSubsequentTimes(targetRouteName, targetMarker.stepVal);
                                         targetMarker.openPopup();
                                     }
@@ -388,6 +398,36 @@
     }
 
     initMapData();
+
+    // =========================================================
+    // 🚀 核心升級：懶加載智慧道路吸附 (Lazy Load Snapping)
+    // 徹底阻斷引擎的「方向慣性」，保證 1->2 與 2->3 各自獨立絕不智障迴轉
+    // =========================================================
+    async function upgradeRouteToRoad(routeName) {
+        var group = routeGroups[routeName];
+        if (!group || group.isSnapped) return;
+        group.isSnapped = true;
+
+        for (var i = 0; i < group.segments.length; i++) {
+            var seg = group.segments[i];
+            
+            // 每次只傳兩個點，引擎就不會強制判斷前一個的車頭方向，完美解決第24站大迴轉的問題
+            var url = `https://router.project-osrm.org/route/v1/foot/${seg.p1.lng},${parseFloat(seg.p1.lat)};${seg.p2.lng},${parseFloat(seg.p2.lat)}?overview=full&geometries=geojson`;
+
+            try {
+                var res = await fetch(url);
+                var data = await res.json();
+                if (data && data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    var coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                    seg.setLatLngs(coords); // 瞬間將原本的直線吸附到馬路邊緣
+                }
+            } catch(e) { 
+                // 若網路斷線，維持原先的直線，絕不當機
+            }
+            // 延遲 60 毫秒，避免一次發出太多請求被伺服器封鎖 (Lazy Loading)
+            await new Promise(r => setTimeout(r, 60)); 
+        }
+    }
 
     function showSubsequentTimes(targetRoute, startStep) {
         hideAllTimeLabels(); 
@@ -431,42 +471,36 @@
         }
     }
 
-    /* 🚀 升級：清運路線自動倒數與狀態控制核心邏輯 */
     function startPanelTimer() {
         clearTimeout(panelTimer);
-        panelTimer = setTimeout(function() {
-            collapsePanel();
-        }, 10000);
+        panelTimer = setTimeout(function() { collapsePanel(); }, 10000);
     }
 
     function collapsePanel() {
         var panel = document.getElementById('control-panel');
         if (panel && !panel.classList.contains('panel-collapsed')) {
-            panel.classList.add('panel-collapsed');
-            clearTimeout(panelTimer);
+            panel.classList.add('panel-collapsed'); clearTimeout(panelTimer);
         }
     }
 
     function expandPanel() {
         var panel = document.getElementById('control-panel');
         if (panel && panel.classList.contains('panel-collapsed')) {
-            panel.classList.remove('panel-collapsed');
-            startPanelTimer();
+            panel.classList.remove('panel-collapsed'); startPanelTimer();
         }
     }
 
     function handlePanelClick(e) {
         var panel = document.getElementById('control-panel');
-        if (panel && panel.classList.contains('dragging')) return; // 🚀 正在拖曳中就不觸發展開
+        if (panel && panel.classList.contains('dragging')) return; 
         
         if (panel && panel.classList.contains('panel-collapsed')) {
             expandPanel();
         } else {
-            startPanelTimer(); // 點擊面板內部元素時，自動重置10秒倒數
+            startPanelTimer(); 
         }
     }
 
-    /* 🚀 升級：雙層完美對齊且極致防破版排版 */
     function addRouteToPanel(name, color, routeMapUrl) {
         var container = document.getElementById('route-list');
         var div = document.createElement('div');
@@ -510,7 +544,12 @@
     }
 
     function toggleRoute(name, isShow) {
-        if (isShow) map.addLayer(routeGroups[name]); else map.removeLayer(routeGroups[name]);
+        if (isShow) {
+            map.addLayer(routeGroups[name]);
+            if (window.upgradeRouteToRoad) upgradeRouteToRoad(name); // 展開時觸發懶加載吸附
+        } else {
+            map.removeLayer(routeGroups[name]);
+        }
     }
 
     function toggleAllRoutes(isShow) {
@@ -527,18 +566,60 @@
         resetFocus(); 
     }
 
-    function focusRoute(targetName, event) {
+    function focusRoute(targetName, event, startStep) {
         if (event) { event.stopPropagation(); event.preventDefault(); }
         currentFocusedRoute = targetName;
+        startStep = (startStep !== undefined && startStep !== null) ? parseFloat(startStep) : null;
+        
         var safeId = 'chk-' + String(targetName).replace(/\s+/g, '-');
         var chkBox = document.getElementById(safeId);
-        if (chkBox && !chkBox.checked) { chkBox.checked = true; if (!map.hasLayer(routeGroups[targetName])) map.addLayer(routeGroups[targetName]); }
+        if (chkBox && !chkBox.checked) { 
+            chkBox.checked = true; 
+            if (!map.hasLayer(routeGroups[targetName])) map.addLayer(routeGroups[targetName]); 
+        }
+
+        if (window.upgradeRouteToRoad) upgradeRouteToRoad(targetName); // 點擊時觸發懶加載吸附
 
         Object.keys(routeGroups).forEach(name => {
             var isTarget = (name === targetName);
             routeGroups[name].eachLayer(layer => {
-                if (layer instanceof L.Polyline) { layer.setStyle({ opacity: isTarget ? 1 : 0.05, weight: isTarget ? 8 : 2 }); if (isTarget && map.hasLayer(layer)) layer.bringToFront(); }
-                if (layer instanceof L.Marker) { layer.setOpacity(isTarget ? 1 : 0.1); }
+                
+                // 🚀 升級：因為線段已經獨立拆開，現在能100%完美裁切掉「已被經過的舊路」
+                if (layer instanceof L.Polyline) { 
+                    if (isTarget) { 
+                        if (startStep !== null && layer.stepStart !== undefined && !isNaN(layer.stepStart)) {
+                            // 隱藏在點擊順序「之前」的線段
+                            if (layer.stepStart < startStep) {
+                                layer.setStyle({ opacity: 0, weight: 0 }); 
+                            } else {
+                                layer.setStyle({ opacity: 1, weight: 8 }); 
+                            }
+                        } else {
+                            layer.setStyle({ opacity: 1, weight: 8 }); 
+                        }
+                        if (map.hasLayer(layer)) layer.bringToFront(); 
+                    } else {
+                        layer.setStyle({ opacity: 0.05, weight: 2 }); 
+                    }
+                }
+
+                if (layer instanceof L.Marker) { 
+                    if (isTarget) {
+                        if (startStep !== null) {
+                            var mStep = parseFloat(layer.stepVal);
+                            // 將點擊之前的過站節點變為半透明
+                            if (!isNaN(mStep) && mStep < startStep) {
+                                layer.setOpacity(0.2); 
+                            } else {
+                                layer.setOpacity(1);
+                            }
+                        } else {
+                            layer.setOpacity(1); 
+                        }
+                    } else {
+                        layer.setOpacity(0.1); 
+                    }
+                }
             });
         });
     }
@@ -548,14 +629,17 @@
         hideAllTimeLabels(); 
         Object.keys(routeGroups).forEach(name => {
             routeGroups[name].eachLayer(layer => {
-                if (layer instanceof L.Polyline && layer.options && layer.options.originalStyle) layer.setStyle(layer.options.originalStyle);
-                if (layer instanceof L.Marker) layer.setOpacity(1);
+                if (layer instanceof L.Polyline && layer.options && layer.options.originalStyle) {
+                    layer.setStyle(layer.options.originalStyle);
+                }
+                if (layer instanceof L.Marker) {
+                    layer.setOpacity(1);
+                }
             });
         });
     }
     map.on('click', resetFocus);
 
-    /* 🚀 升級：強大的滑鼠與行動觸控自由拖曳核心函式 (與 Newindex 架構完美接軌) */
     function makeDraggable(element, handle) {
         let isDragging = false, currentX = 0, currentY = 0, initialX = 0, initialY = 0, xOffset = 0, yOffset = 0;
         
@@ -568,10 +652,7 @@
         document.addEventListener("touchmove", drag, {passive: false});
 
         function dragStart(e) {
-            // 防呆保護：點擊輸入框、按鈕、清單捲動不觸發拖曳
             if (e.target.closest('#route-search') || e.target.closest('.btn-group') || e.target.closest('#route-list')) return;
-            
-            // 如果不是縮小狀態，且點擊的地方不是標題列，就不觸發拖曳
             if (!element.classList.contains('panel-collapsed') && !e.target.closest('#panel-drag-handle')) return;
 
             if (e.type === "touchstart") { 
@@ -611,7 +692,6 @@
         }
     }
 
-    // 啟動面板拖曳機制 (整片面板都可以當作縮小後的拖曳點，展開時則是透過標題列)
     window.resetPanelPos = makeDraggable(document.getElementById('control-panel'), document.getElementById('control-panel'));
 
 </script>
