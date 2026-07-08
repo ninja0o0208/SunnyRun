@@ -40,17 +40,29 @@
   .stop-popup .sp-btn { display: inline-block; padding: 6px 9px; border-radius: 8px; text-decoration: none; font-size: 12px; font-weight: 700; background: #202124; color: #fff; margin-top: 8px; margin-right: 6px; }
   .leaflet-control-attribution { font-size: 10px; }
   .hidden { display: none !important; }
+  .mobile-toolbar { display: none; }
+  .mobile-close, .mobile-panel-head { display: none; }
+  .panel-hidden { display: none !important; }
+  @media (min-width: 761px) {
+    .top-panel.panel-hidden, .side-panel.panel-hidden { display: block !important; }
+  }
   @media (max-width: 760px) {
-    .top-panel { left: 8px; right: 8px; top: 8px; grid-template-columns: 1fr; padding: 8px 9px; }
+    .mobile-toolbar { position: absolute; z-index: 1002; left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 8px); display: flex; gap: 7px; align-items: center; pointer-events: auto; }
+    .mobile-toolbar button, .mobile-toolbar .badge { border: 0; border-radius: 999px; padding: 8px 11px; background: rgba(255,255,255,.94); box-shadow: 0 3px 12px rgba(0,0,0,.16); font-weight: 800; font-size: 13px; color: #202124; backdrop-filter: blur(8px); }
+    .mobile-toolbar button { cursor: pointer; }
+    .mobile-toolbar .badge { margin-left: auto; font-size: 12px; max-width: 42vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mobile-close { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999px; padding: 5px 9px; background: #202124; color: white; font-weight: 800; cursor: pointer; }
+    .mobile-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 800; }
+    .top-panel { left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 48px); grid-template-columns: 1fr auto; padding: 8px 9px; max-height: 33vh; overflow: auto; }
     .title { font-size: 15px; }
-    .subtitle { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .status { text-align: left; font-size: 11px; }
-    .side-panel { left: 8px; right: 8px; top: 83px; bottom: auto; width: auto; max-height: 38vh; padding: 8px; }
-    .route-list { max-height: 24vh; }
+    .subtitle { font-size: 11px; }
+    .status { text-align: left; font-size: 11px; grid-column: 1 / -1; }
+    .side-panel { left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 48px); bottom: auto; width: auto; max-height: 56vh; padding: 8px; }
+    .route-list { max-height: 34vh; }
     .route-item { padding: 6px; margin-bottom: 5px; }
     .route-name { font-size: 12px; }
     .route-meta { font-size: 10px; }
-    .bottom-panel { left: 8px; right: 8px; bottom: 8px; grid-template-columns: auto auto 1fr; padding: 8px; gap: 6px; }
+    .bottom-panel { left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); grid-template-columns: auto auto 1fr; padding: 8px; gap: 6px; }
     .bottom-panel button { padding: 6px 8px; font-size: 12px; }
     .bottom-panel select { padding: 5px 6px; font-size: 12px; }
     .time-readout { grid-column: 1 / -1; text-align: left; font-size: 12px; min-width: 0; }
@@ -60,14 +72,21 @@
 </head>
 <body>
 <div id="map"></div>
-<div class="panel top-panel">
+<div class="mobile-toolbar">
+  <button id="mobileRoutesBtn" type="button">☰ 路線</button>
+  <button id="mobileInfoBtn" type="button">ℹ 資訊</button>
+  <span class="badge" id="mobileBadge">已選 0 / 0</span>
+</div>
+<div class="panel top-panel" id="topPanel">
   <div>
     <div class="title">垃圾車多路線總覽地圖</div>
     <div class="subtitle">預設全關；可用網址參數 <strong>?all=1</strong> 全開、<strong>?all=0</strong> 全關、<strong>?routes=235053,235054</strong> 指定路線</div>
   </div>
+  <button class="mobile-close" id="closeTopBtn" type="button">關閉</button>
   <div class="status" id="statusText">尚未選擇路線</div>
 </div>
-<div class="panel side-panel">
+<div class="panel side-panel" id="sidePanel">
+  <div class="mobile-panel-head"><span>路線篩選</span><button class="mobile-close" id="closeSideBtn" type="button">關閉</button></div>
   <div class="search">
     <input id="filterInput" placeholder="搜尋 lineid / 車號" />
     <button class="mini-btn" id="showFilteredBtn">開啟篩選</button>
@@ -112,6 +131,13 @@ const timeText = document.getElementById('timeText');
 const slider = document.getElementById('slider');
 const playBtn = document.getElementById('playBtn');
 const speedSelect = document.getElementById('speedSelect');
+const topPanel = document.getElementById('topPanel');
+const sidePanel = document.getElementById('sidePanel');
+const mobileRoutesBtn = document.getElementById('mobileRoutesBtn');
+const mobileInfoBtn = document.getElementById('mobileInfoBtn');
+const mobileBadge = document.getElementById('mobileBadge');
+const closeTopBtn = document.getElementById('closeTopBtn');
+const closeSideBtn = document.getElementById('closeSideBtn');
 
 let activeIds = new Set();
 let layers = new Map();
@@ -120,6 +146,38 @@ let currentT = null;
 let timer = null;
 let speedMultiplier = 1;
 const sliderMax = 1000;
+
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 760px)').matches;
+}
+
+function hideMobilePanels() {
+  if (!isMobileViewport()) return;
+  topPanel.classList.add('panel-hidden');
+  sidePanel.classList.add('panel-hidden');
+}
+
+function showMobilePanel(panelName) {
+  if (!isMobileViewport()) return;
+  if (panelName === 'routes') {
+    topPanel.classList.add('panel-hidden');
+    sidePanel.classList.remove('panel-hidden');
+    setTimeout(() => filterInput.focus({ preventScroll: true }), 80);
+  } else if (panelName === 'info') {
+    sidePanel.classList.add('panel-hidden');
+    topPanel.classList.remove('panel-hidden');
+    window.clearTimeout(showMobilePanel.infoTimer);
+    showMobilePanel.infoTimer = window.setTimeout(() => {
+      if (isMobileViewport()) topPanel.classList.add('panel-hidden');
+    }, 4500);
+  }
+}
+
+function updateMobileBadge() {
+  if (!mobileBadge) return;
+  const n = activeIds.size;
+  mobileBadge.textContent = n ? `已選 ${n} / ${routes.length}` : `未選路線`;
+}
 
 function fmtTime(sec) {
   if (!Number.isFinite(sec)) return '--';
@@ -259,6 +317,7 @@ function recomputeTimeline(preserveRatio) {
     slider.value = 0;
     timeText.textContent = '--';
     statusText.textContent = '尚未選擇路線';
+    updateMobileBadge();
     pause();
     return;
   }
@@ -319,6 +378,7 @@ function updateFrame() {
   const stopCount = selectedRoutes.reduce((sum, r) => sum + r.stopCount, 0);
   timeText.textContent = `${fmtTime(currentT)}｜${fmtDuration(currentT - timeline.start)} / ${fmtDuration(dur)}`;
   statusText.textContent = `已選 ${selectedRoutes.length} / ${routes.length} 條｜時間 ${fmtTime(timeline.start)} → ${fmtTime(timeline.end)}｜展示長度 ${fmtDuration(dur)}｜總里程 ${totalKm.toFixed(1)} km｜停靠點 ${stopCount}`;
+  updateMobileBadge();
 }
 
 function stepSeconds() {
@@ -378,10 +438,22 @@ function applyUrlParams() {
 }
 
 filterInput.addEventListener('input', renderList);
-document.getElementById('showFilteredBtn').addEventListener('click', () => setMany(visibleFilteredIds(), true));
-document.getElementById('allOnBtn').addEventListener('click', () => setMany(routes.map(r => r.id), true));
-document.getElementById('allOffBtn').addEventListener('click', () => setMany(routes.map(r => r.id), false));
-document.getElementById('fitBtn').addEventListener('click', fitActiveBounds);
+document.getElementById('showFilteredBtn').addEventListener('click', () => { setMany(visibleFilteredIds(), true); if (isMobileViewport()) hideMobilePanels(); });
+document.getElementById('allOnBtn').addEventListener('click', () => { setMany(routes.map(r => r.id), true); if (isMobileViewport()) hideMobilePanels(); });
+document.getElementById('allOffBtn').addEventListener('click', () => { setMany(routes.map(r => r.id), false); if (isMobileViewport()) hideMobilePanels(); });
+document.getElementById('fitBtn').addEventListener('click', () => { fitActiveBounds(); if (isMobileViewport()) hideMobilePanels(); });
+mobileRoutesBtn.addEventListener('click', () => showMobilePanel('routes'));
+mobileInfoBtn.addEventListener('click', () => showMobilePanel('info'));
+closeTopBtn.addEventListener('click', hideMobilePanels);
+closeSideBtn.addEventListener('click', hideMobilePanels);
+window.addEventListener('resize', () => {
+  if (isMobileViewport()) {
+    hideMobilePanels();
+  } else {
+    topPanel.classList.remove('panel-hidden');
+    sidePanel.classList.remove('panel-hidden');
+  }
+});
 playBtn.addEventListener('click', () => timer ? pause() : play());
 speedSelect.addEventListener('change', () => { speedMultiplier = Number(speedSelect.value) || 1; });
 slider.addEventListener('input', () => {
@@ -394,6 +466,8 @@ slider.addEventListener('input', () => {
 
 renderList();
 applyUrlParams();
+updateMobileBadge();
+if (isMobileViewport()) hideMobilePanels();
 if (routes.length) {
   const allLatLngs = [];
   routes.forEach(r => r.points.forEach(p => allLatLngs.push([p.lat, p.lon])));
