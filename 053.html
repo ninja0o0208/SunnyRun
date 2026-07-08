@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>路線 235053</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+html, body, #map { height: 100%; margin: 0; font-family: system-ui, -apple-system, "Microsoft JhengHei", sans-serif; }
+.panel {
+  position: absolute; z-index: 1000; background: rgba(16,24,32,.88); color: #fff;
+  border-radius: 12px; padding: 14px 18px; box-shadow: 0 4px 20px rgba(0,0,0,.2);
+}
+.title { top: 18px; left: 18px; min-width: 340px; }
+.title h1 { margin: 0 0 8px 0; font-size: 34px; line-height: 1.1; }
+.title div { font-size: 18px; margin-top: 4px; }
+.stats { top: 18px; right: 18px; text-align: left; }
+.stats .label { font-size: 18px; opacity: .9; }
+.stats .km { font-size: 42px; font-weight: 800; color: #ff9b2f; }
+.timebox { left: 18px; bottom: 92px; }
+.timebox .now { font-size: 38px; font-weight: 800; letter-spacing: 1px; }
+.controls {
+  left: 18px; right: 18px; bottom: 18px; display: flex; align-items: center; gap: 14px;
+}
+button, select {
+  border: 0; border-radius: 10px; padding: 10px 14px; font-size: 16px; cursor: pointer;
+}
+input[type=range] { flex: 1; }
+.legend {
+  top: 190px; left: 18px; color: #202020; background: rgba(255,255,255,.86);
+}
+.legend div { margin: 9px 0; font-size: 16px; }
+.line-sample { display:inline-block; width:34px; height:0; border-top:5px solid #999; margin-right:12px; vertical-align:middle; border-radius:4px; }
+.line-done { border-color:#1f2428; }
+.dot-sample { display:inline-block; width:12px; height:12px; background:#009b55; border-radius:50%; margin-right:22px; margin-left:11px; vertical-align:middle; }
+.truck-icon { font-size: 30px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.45)); transform: translate(-15px,-15px); }
+.leaflet-control-attribution { font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel title">
+  <h1>路線 235053</h1>
+  <div>🚛 垃圾車動態路線</div>
+  <div>車號：900-TW</div>
+</div>
+
+<div class="panel stats">
+  <div class="label">路線距離</div>
+  <div><span class="km">5.74</span> km</div>
+  <div class="label">GPS點數：98</div>
+</div>
+
+<div class="panel legend">
+  <div><span class="line-sample"></span>完整路線</div>
+  <div><span class="line-sample line-done"></span>已走路段</div>
+  <div><span class="dot-sample"></span>GPS記錄點</div>
+  <div>🚛 垃圾車位置</div>
+</div>
+
+<div class="panel timebox">
+  <div>目前時間</div>
+  <div class="now" id="timeText">--:--:--</div>
+  <div id="dateText"></div>
+</div>
+
+<div class="panel controls">
+  <button id="playBtn">▶ / ❚❚</button>
+  <button id="resetBtn">⟲</button>
+  <label>速度</label>
+  <select id="speed">
+    <option value="0.5">0.5x</option>
+    <option value="1">1x</option>
+    <option value="2">2x</option>
+    <option value="5" selected>5x</option>
+    <option value="10">10x</option>
+    <option value="30">30x</option>
+    <option value="60">60x</option>
+  </select>
+  <input id="slider" type="range" min="0" max="1000" value="0"/>
+  <span id="progressText">00:00 / 00:00</span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const points = [{"lat": 24.992225, "lon": 121.469678333333, "time": "2026/07/07 18:32:22", "location": "新北市中和區民享街462號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.992225, "lon": 121.46968, "time": "2026/07/07 18:32:42", "location": "新北市中和區民享街462號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9946566666667, "lon": 121.469003333333, "time": "2026/07/07 18:36:22", "location": "新北市土城區延壽路118-6號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9951366666667, "lon": 121.468825, "time": "2026/07/07 18:37:22", "location": "新北市中和區華安街102號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9965583333333, "lon": 121.468048333333, "time": "2026/07/07 18:38:22", "location": "新北市中和區民德路266號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9974766666667, "lon": 121.467363333333, "time": "2026/07/07 18:39:22", "location": "新北市中和區華安街32巷2號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9981366666667, "lon": 121.466066666667, "time": "2026/07/07 18:40:22", "location": "新北市中和區華安街16巷3號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9973933333333, "lon": 121.46526, "time": "2026/07/07 18:42:22", "location": "新北市中和區華順街105號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9967766666667, "lon": 121.46547, "time": "2026/07/07 18:43:22", "location": "新北市中和區華福街6號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9967483333333, "lon": 121.46622, "time": "2026/07/07 18:45:28", "location": "新北市中和區華福街37號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9964866666667, "lon": 121.466476666667, "time": "2026/07/07 18:46:22", "location": "新北市中和區華福街42巷1弄1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99602, "lon": 121.466421666667, "time": "2026/07/07 18:47:22", "location": "新北市中和區民德路290巷42號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9960166666667, "lon": 121.466435, "time": "2026/07/07 18:47:42", "location": "新北市中和區民德路290巷42號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9956816666667, "lon": 121.467561666667, "time": "2026/07/07 18:49:22", "location": "新北市中和區民德路292號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99568, "lon": 121.46756, "time": "2026/07/07 18:49:42", "location": "新北市中和區民德路292號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9952383333333, "lon": 121.467098333333, "time": "2026/07/07 18:50:47", "location": "新北市中和區民德路306巷1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99539, "lon": 121.466576666667, "time": "2026/07/07 18:51:22", "location": "新北市中和區壽德街27-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.995485, "lon": 121.466316666667, "time": "2026/07/07 18:51:42", "location": "新北市中和區壽德街27-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.996015, "lon": 121.465655, "time": "2026/07/07 18:52:42", "location": "新北市中和區華順街135巷16號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.996265, "lon": 121.465168333333, "time": "2026/07/07 18:53:22", "location": "新北市中和區華順街133號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9958866666667, "lon": 121.465096666667, "time": "2026/07/07 18:53:42", "location": "新北市中和區壽德街11號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9948616666667, "lon": 121.466241666667, "time": "2026/07/07 18:54:42", "location": "新北市中和區壽德街20-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9941716666667, "lon": 121.466688333333, "time": "2026/07/07 18:55:22", "location": "新北市中和區壽德街26號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9939416666667, "lon": 121.466006666667, "time": "2026/07/07 18:56:22", "location": "新北市中和區民德路360號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9946183333333, "lon": 121.465331666667, "time": "2026/07/07 18:56:42", "location": "新北市中和區和平路200巷35弄1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9945616666667, "lon": 121.464916666667, "time": "2026/07/07 18:57:22", "location": "新北市板橋區和平路190巷28號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9951733333333, "lon": 121.464438333333, "time": "2026/07/07 18:58:22", "location": "新北市中和區和平路200巷1-7號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9953033333333, "lon": 121.464275, "time": "2026/07/07 18:58:42", "location": "新北市板橋區和平路174巷1弄7號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9953433333333, "lon": 121.463446666667, "time": "2026/07/07 18:59:22", "location": "新北市板橋區和平路174巷1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9960533333333, "lon": 121.463851666667, "time": "2026/07/07 19:00:22", "location": "新北市板橋區和平路165號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9960583333333, "lon": 121.463853333333, "time": "2026/07/07 19:00:42", "location": "新北市板橋區和平路165號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.996355, "lon": 121.46422, "time": "2026/07/07 19:01:22", "location": "新北市中和區和平路228-3號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99697, "lon": 121.46467, "time": "2026/07/07 19:02:22", "location": "新北市中和區和平路250號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9968416666667, "lon": 121.465348333333, "time": "2026/07/07 19:02:42", "location": "新北市中和區華福街6號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9966033333333, "lon": 121.46694, "time": "2026/07/07 19:03:22", "location": "新北市中和區華福街67號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9964516666667, "lon": 121.467588333333, "time": "2026/07/07 19:04:22", "location": "新北市中和區華福街88號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99647, "lon": 121.467725, "time": "2026/07/07 19:05:22", "location": "新北市中和區民德路274號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99687, "lon": 121.467911666667, "time": "2026/07/07 19:06:22", "location": "新北市中和區民德路260號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9969283333333, "lon": 121.467698333333, "time": "2026/07/07 19:06:42", "location": "新北市中和區華福街71巷32號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9968616666667, "lon": 121.467208333333, "time": "2026/07/07 19:07:42", "location": "新北市中和區華福街71巷2號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9965983333333, "lon": 121.467166666667, "time": "2026/07/07 19:08:22", "location": "新北市中和區華福街73號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99664, "lon": 121.466595, "time": "2026/07/07 19:08:46", "location": "新北市中和區華福街46-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99735, "lon": 121.466846666667, "time": "2026/07/07 19:09:42", "location": "新北市中和區華安街30巷16-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9976683333333, "lon": 121.466935, "time": "2026/07/07 19:10:26", "location": "新北市中和區華安街30巷2號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99779, "lon": 121.466996666667, "time": "2026/07/07 19:10:42", "location": "新北市中和區華安街30巷1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9979816666667, "lon": 121.4673, "time": "2026/07/07 19:11:42", "location": "新北市中和區華安街19巷8號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.997875, "lon": 121.467461666667, "time": "2026/07/07 19:12:22", "location": "新北市中和區華安街19巷10號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99775, "lon": 121.467495, "time": "2026/07/07 19:12:42", "location": "新北市中和區華安街21巷9號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9979883333333, "lon": 121.467686666667, "time": "2026/07/07 19:14:22", "location": "新北市中和區華安街19巷16號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99821, "lon": 121.468231666667, "time": "2026/07/07 19:14:42", "location": "新北市中和區民德路208號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99828, "lon": 121.467855, "time": "2026/07/07 19:15:42", "location": "新北市中和區華安街17巷28號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9982833333333, "lon": 121.467446666667, "time": "2026/07/07 19:16:22", "location": "新北市中和區華安街17巷29號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.998275, "lon": 121.466928333333, "time": "2026/07/07 19:17:22", "location": "新北市中和區華安街17巷6-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9982433333333, "lon": 121.466738333333, "time": "2026/07/07 19:17:42", "location": "新北市中和區華安街17巷7號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99838, "lon": 121.466108333333, "time": "2026/07/07 19:18:22", "location": "新北市中和區華安街16巷1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.998395, "lon": 121.465663333333, "time": "2026/07/07 19:19:22", "location": "新北市中和區華順街71號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9983833333333, "lon": 121.465646666667, "time": "2026/07/07 19:19:42", "location": "新北市中和區華順街71號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9984983333333, "lon": 121.465321666667, "time": "2026/07/07 19:20:22", "location": "新北市中和區華順街60號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9985266666667, "lon": 121.46651, "time": "2026/07/07 19:21:22", "location": "新北市中和區華順街42號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9986633333333, "lon": 121.466855, "time": "2026/07/07 19:21:52", "location": "新北市中和區華順街28號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9986983333333, "lon": 121.467266666667, "time": "2026/07/07 19:22:22", "location": "新北市中和區華順街27號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9988166666667, "lon": 121.46764, "time": "2026/07/07 19:23:22", "location": "新北市中和區華順街2巷2號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.999065, "lon": 121.46737, "time": "2026/07/07 19:24:22", "location": "新北市中和區華順街2巷3號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9986283333333, "lon": 121.466776666667, "time": "2026/07/07 19:25:22", "location": "新北市中和區華順街32號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9986633333333, "lon": 121.46764, "time": "2026/07/07 19:25:42", "location": "新北市中和區華順街9號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9988583333333, "lon": 121.468435, "time": "2026/07/07 19:26:42", "location": "新北市中和區民德路197-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0000233333333, "lon": 121.468708333333, "time": "2026/07/07 19:27:22", "location": "新北市中和區民德路155號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0014266666667, "lon": 121.468911666667, "time": "2026/07/07 19:27:42", "location": "新北市中和區民德路75號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0013883333333, "lon": 121.468481666667, "time": "2026/07/07 19:28:42", "location": "新北市中和區國光街140號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0015166666667, "lon": 121.468433333333, "time": "2026/07/07 19:29:22", "location": "新北市中和區國光街140巷5號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0015683333333, "lon": 121.468365, "time": "2026/07/07 19:29:42", "location": "新北市中和區國光街140巷1號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0021633333333, "lon": 121.468091666667, "time": "2026/07/07 19:30:42", "location": "新北市中和區國光街142巷31號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.00203, "lon": 121.46748, "time": "2026/07/07 19:31:22", "location": "新北市中和區國光街184巷20號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.00203, "lon": 121.467475, "time": "2026/07/07 19:31:42", "location": "新北市中和區國光街184巷20號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.00193, "lon": 121.466825, "time": "2026/07/07 19:32:42", "location": "新北市中和區國光街205巷2號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0019116666667, "lon": 121.466623333333, "time": "2026/07/07 19:33:22", "location": "新北市中和區國光街207號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0012816666667, "lon": 121.466471666667, "time": "2026/07/07 19:34:49", "location": "新北市中和區國光街215巷9-2號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0009566666667, "lon": 121.46664, "time": "2026/07/07 19:35:22", "location": "新北市中和區國光街215巷10弄1-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0006933333333, "lon": 121.4668, "time": "2026/07/07 19:36:22", "location": "新北市中和區國光街215巷10弄10號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.00053, "lon": 121.46681, "time": "2026/07/07 19:36:42", "location": "新北市中和區國光街215巷10弄12號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0004866666667, "lon": 121.467228333333, "time": "2026/07/07 19:37:22", "location": "新北市中和區國光街215巷29號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.000535, "lon": 121.467638333333, "time": "2026/07/07 19:38:22", "location": "新北市中和區國光街205巷20號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0005983333333, "lon": 121.467785, "time": "2026/07/07 19:38:56", "location": "新北市中和區民德路146巷14號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.000935, "lon": 121.467716666667, "time": "2026/07/07 19:39:22", "location": "新北市中和區國光街189巷20號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0010883333333, "lon": 121.467731666667, "time": "2026/07/07 19:40:22", "location": "新北市中和區國光街189巷1號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0013083333333, "lon": 121.467671666667, "time": "2026/07/07 19:40:42", "location": "新北市中和區國光街171巷4號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0013733333333, "lon": 121.467411666667, "time": "2026/07/07 19:41:22", "location": "新北市中和區國光街189巷12弄4號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0017316666667, "lon": 121.4673, "time": "2026/07/07 19:42:22", "location": "新北市中和區國光街191號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.00171, "lon": 121.467503333333, "time": "2026/07/07 19:42:46", "location": "新北市中和區國光街187號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0012533333333, "lon": 121.468738333333, "time": "2026/07/07 19:44:22", "location": "新北市中和區民德路80號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.0008466666667, "lon": 121.468863333333, "time": "2026/07/07 19:44:42", "location": "新北市中和區民德路103號", "lineid": "235053", "car": "900-TW"}, {"lat": 25.000795, "lon": 121.46889, "time": "2026/07/07 19:45:22", "location": "新北市中和區民德路105號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99942, "lon": 121.468471666667, "time": "2026/07/07 19:46:22", "location": "新北市中和區民德路177號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99884, "lon": 121.46834, "time": "2026/07/07 19:46:52", "location": "新北市中和區民德路197-1號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9980883333333, "lon": 121.468243333333, "time": "2026/07/07 19:47:42", "location": "新北市中和區民德路216號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.99761, "lon": 121.468091666667, "time": "2026/07/07 19:48:22", "location": "新北市中和區民德路230號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.9971966666667, "lon": 121.468025, "time": "2026/07/07 19:48:58", "location": "新北市中和區民德路250號", "lineid": "235053", "car": "900-TW"}, {"lat": 24.997145, "lon": 121.468035, "time": "2026/07/07 19:49:42", "location": "新北市中和區民德路250號", "lineid": "235053", "car": "900-TW"}];
+const latlngs = points.map(p => [p.lat, p.lon]);
+
+const map = L.map('map', { zoomControl: false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  maxZoom: 20
+}).addTo(map);
+
+const full = L.polyline(latlngs, { color: '#9a9a9a', weight: 5, opacity: 0.8 }).addTo(map);
+const done = L.polyline([], { color: '#202428', weight: 6, opacity: 0.95 }).addTo(map);
+
+latlngs.forEach(ll => L.circleMarker(ll, {
+  radius: 5, color: '#fff', weight: 1.5, fillColor: '#009b55', fillOpacity: 1
+}).addTo(map));
+
+const truckIcon = L.divIcon({ className: 'truck-icon', html: '🚛', iconSize: [32, 32] });
+const truck = L.marker(latlngs[0], { icon: truckIcon }).addTo(map);
+
+map.fitBounds(full.getBounds().pad(0.18));
+
+let idx = 0;
+let playing = true;
+let timer = null;
+
+function showTime(p) {
+  const raw = p.time || '';
+  const parts = raw.split(' ');
+  document.getElementById('timeText').textContent = parts.length > 1 ? parts[1] : raw;
+  document.getElementById('dateText').textContent = parts.length > 1 ? parts[0] : '';
+}
+
+function setIndex(i) {
+  idx = Math.max(0, Math.min(points.length - 1, Math.round(i)));
+  truck.setLatLng(latlngs[idx]);
+  done.setLatLngs(latlngs.slice(0, idx + 1));
+  showTime(points[idx]);
+  document.getElementById('slider').value = Math.round(idx / (points.length - 1) * 1000);
+  document.getElementById('progressText').textContent = `${idx + 1} / ${points.length}`;
+}
+
+function step() {
+  if (!playing) return;
+  const spd = parseFloat(document.getElementById('speed').value);
+  setIndex(idx + Math.max(1, Math.round(spd)));
+  if (idx >= points.length - 1) playing = false;
+}
+
+function startTimer() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(step, 180);
+}
+
+document.getElementById('playBtn').onclick = () => { playing = !playing; };
+document.getElementById('resetBtn').onclick = () => { playing = false; setIndex(0); };
+document.getElementById('slider').oninput = e => {
+  playing = false;
+  setIndex(parseInt(e.target.value, 10) / 1000 * (points.length - 1));
+};
+
+setIndex(0);
+startTimer();
+
+window.__routeFrameCount = points.length;
+window.__setRouteFrame = function(i) { setIndex(i); };
+</script>
+</body>
+</html>
